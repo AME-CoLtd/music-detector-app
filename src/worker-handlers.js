@@ -198,7 +198,7 @@ export async function handleIdentify(request, env, upstashClient) {
 /**
  * 4. 账户更新 (绑定手机/修改密码/发送验证码)
  */
-export export async function handleUserUpdate(request, env, upstashClient, type) { // ⚠️ EXPORT 修复在这里
+export async function handleUserUpdate(request, env, upstashClient, type)  { // ⚠️ EXPORT 修复在这里
     const userToken = request.headers.get('Authorization')?.substring(7);
     const username = await upstashClient.getSession(userToken); 
     if (!username) return new Response(JSON.stringify({ success: false, message: 'Session expired' }), { status: 401, headers: JSON_HEADER });
