@@ -1,4 +1,4 @@
-// api/[[path]].js
+// api/[[path]].js - 最终兼容 Node.js Serverless Function 的版本
 
 import { Upstash } from '../src/upstash-client.js';
 import {
@@ -10,6 +10,21 @@ import {
 } from '../src/worker-handlers.js'; 
 
 const APP_JSON = 'application/json';
+
+// --- 请求头兼容层 ---
+function getHeader(request, headerName) {
+    // 检查是否是 WHATWG Request 对象
+    if (request.headers && typeof request.headers.get === 'function') {
+        return request.headers.get(headerName);
+    }
+    // 否则，假定是 Node.js http 兼容对象，使用小写键
+    if (request.headers && typeof request.headers[headerName.toLowerCase()] !== 'undefined') {
+        return request.headers[headerName.toLowerCase()];
+    }
+    return null;
+}
+// --- ---------------- ---
+
 
 const jsonResponse = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -33,9 +48,12 @@ async function authenticateToken(token, upstashClient) {
  */
 export default async function (request) {
     
-    // ⚠️ 关键修复：构建完整的 URL 对象，以避免 Node.js 运行时中的 Invalid URL 错误
-    const host = request.headers.get('host');
-    const path = new URL(request.url, `https://${host}`).pathname;
+    // ⚠️ 修复：使用 getHeader 函数获取 host 和 Authorization
+    const host = getHeader(request, 'Host');
+    
+    // 构建完整的 URL 对象，以避免 Invalid URL 错误
+    const fullUrl = new URL(request.url, `https://${host}`);
+    const path = fullUrl.pathname;
     
     const env = process.env;
     const upstashClient = Upstash(env); 
@@ -49,7 +67,7 @@ export default async function (request) {
     }
 
     // 2. 认证检查
-    const authHeader = request.headers.get('Authorization');
+    const authHeader = getHeader(request, 'Authorization'); // 使用兼容函数
     const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
     let isAuthenticated = false;
 
