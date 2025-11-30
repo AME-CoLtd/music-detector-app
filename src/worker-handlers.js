@@ -258,4 +258,4 @@ export async function handlePasswordReset(request, env, upstashClient, action) {
         const { phone, newPassword, smsCode } = body;
         const storedCode = await upstashClient.getSmsCode(phone);
         
-        if (smsCode !== storedCode) return new Response(JSON.stringify({ success: false, message:
+        if (smsCode !== storedCode) return new Response(JSON.stringify({ success: false, message:}
