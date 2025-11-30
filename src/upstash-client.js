@@ -1,5 +1,5 @@
 // src/upstash-client.js
-// Upstash Redis REST API 客户端封装
+// Upstash Redis REST API 客户端封装 (包含 URL 缺失检查)
 
 /**
  * 封装 Upstash Redis REST API 调用
@@ -8,6 +8,14 @@
  * @param {Array<string | number>} args 命令参数
  */
 async function upstashExecute(env, command, ...args) {
+    
+    // CRITICAL CHECK: 如果 URL 变量缺失，立即抛出错误，而不是让 Node.js 抛出不明确的 TypeError
+    if (!env.UPSTASH_REDIS_REST_URL) {
+        console.error("CRITICAL ERROR: UPSTASH_REDIS_REST_URL is missing!");
+        // 抛出明确的错误信息，便于调试
+        throw new Error("Missing Upstash URL environment variable."); 
+    }
+    
     // 构建 REST API URL: [URL]/[COMMAND]/[ARG1]/[ARG2]/...
     const url = `${env.UPSTASH_REDIS_REST_URL}/${command}/${args.map(a => encodeURIComponent(String(a))).join('/')}`;
     
@@ -20,21 +28,22 @@ async function upstashExecute(env, command, ...args) {
         });
         
         if (!response.ok) {
-             console.error(`Upstash HTTP Error: ${response.status} ${response.statusText}`);
-             throw new Error(`Upstash Error: ${response.statusText}`);
+             console.error(`Upstash HTTP Error: ${response.status} ${response.statusText} for command: ${command}`);
+             throw new Error(`Upstash API call failed: ${response.statusText}`);
         }
         
         const data = await response.json();
         if (data.error) {
-            console.error('Upstash Redis Error:', data.error);
+            console.error('Upstash Redis Error:', data.error, 'for command:', command);
             throw new Error(`Upstash Redis Error: ${data.error}`);
         }
         
         return data.result; // 返回 Redis 命令的结果
         
     } catch (error) {
-        console.error('Upstash API call failed:', error);
-        return null;
+        // 捕获任何网络或解析错误
+        console.error('Upstash API execution failed:', error);
+        throw new Error(`Upstash Execution Error: ${error.message}`);
     }
 }
 
@@ -45,18 +54,10 @@ async function upstashExecute(env, command, ...args) {
 export const Upstash = (env) => ({
     
     // --- 用户数据 (使用 Hash 存储，键 user:username) ---
-    
-    /**
-     * 从 Hash 中获取所有用户字段
-     * @param {string} username 
-     * @returns {Promise<object | null>} { field1: value1, field2: value2, ... }
-     */
     async getUser(username) {
-        // HGETALL 返回一个数组 [key1, value1, key2, value2, ...]
         const result = await upstashExecute(env, 'HGETALL', `user:${username}`);
         if (!result || result.length === 0) return null;
         
-        // 将数组转换为对象
         const userObj = {};
         for (let i = 0; i < result.length; i += 2) {
             userObj[result[i]] = result[i + 1];
@@ -64,54 +65,26 @@ export const Upstash = (env) => ({
         return userObj;
     },
     
-    /**
-     * 将用户字段批量保存到 Hash
-     * @param {string} username 
-     * @param {object} userObj { field: value, ... }
-     */
     saveUser(username, userObj) {
-        const hsetArgs = Object.entries(userObj).flat(); // 展平为 [key1, value1, key2, value2, ...]
+        const hsetArgs = Object.entries(userObj).flat(); 
         if (hsetArgs.length === 0) return Promise.resolve();
         return upstashExecute(env, 'HSET', `user:${username}`, ...hsetArgs);
     },
 
     // --- 会话存储 (使用 String 存储，键 session:token) ---
-    
-    /**
-     * 存储 Session Token，带过期时间
-     * @param {string} token 
-     * @param {string} username 
-     * @param {number} ttlSeconds 
-     */
     setSession: (token, username, ttlSeconds = 3600) => 
         upstashExecute(env, 'SET', `session:${token}`, username, 'EX', ttlSeconds),
     
-    /**
-     * 获取 Session Token 对应的值 (username)
-     * @param {string} token 
-     */
     getSession: (token) => upstashExecute(env, 'GET', `session:${token}`),
 
     // --- 加密配置和验证码存储 (使用 String 存储) ---
 
-    /**
-     * 存储加密后的 API 密钥
-     */
     setSecret: (key, value) => upstashExecute(env, 'SET', `secret:${key}`, value),
 
-    /**
-     * 获取加密后的 API 密钥
-     */
     getSecret: (key) => upstashExecute(env, 'GET', `secret:${key}`),
     
-    /**
-     * 短信验证码存储 (键 sms:phone，带过期时间)
-     */
     setSmsCode: (phone, code, ttlSeconds = 300) => 
         upstashExecute(env, 'SET', `sms:${phone}`, code, 'EX', ttlSeconds),
 
-    /**
-     * 获取短信验证码
-     */
     getSmsCode: (phone) => upstashExecute(env, 'GET', `sms:${phone}`),
 });
