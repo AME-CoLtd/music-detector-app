@@ -1,0 +1,13 @@
+name = "music-copyright-worker"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+workers_dev = true
+
+[vars]
+# 直接作为环境变量注入（安全级别低于 Secret，但 Worker 稳定访问）
+DEFAULT_ADMIN_USER = "ameadnin"
+DEFAULT_ADMIN_PASS = "admin123"
+UPSTASH_REDIS_REST_URL = "https://cunning-gorilla-16498.upstash.io"
+UPSTASH_REDIS_REST_TOKEN = "AUByAAIncDIzNDdlNjMzM2RjOTg0NzM5YWRlODkwYTRhMGI5OTgyYnAyMTY0OTg"
+
+# ⚠️ 注意：其他 Secrets (MASTER_ENCRYPTION_KEY, ACR_KEY等) 保持不变，它们必须通过 wrangler secret 注入。
