@@ -15,7 +15,6 @@ async function hashPassword(password, salt) {
     const saltString = salt instanceof Buffer ? salt.toString('base64') : salt;
     const saltBuffer = Buffer.from(saltString, 'base64');
     
-    // 真实的生产代码应使用 crypto.pbkdf2Sync 或异步版本
     const hash = crypto.createHash(HASH_ALGO).update(password).update(saltBuffer).digest('base64');
     return { 
         hash: hash, 
@@ -30,7 +29,7 @@ async function verifyPassword(password, storedHash, saltBase64) {
     return expectedHash === storedHash;
 }
 
-// 3. 简化 Base64 加密 (⚠️ 生产环境必须替换为 AES-GCM)
+// 3. 简化 Base64 加密
 async function encryptData(data, masterKeyBase64) {
     return Buffer.from(data).toString('base64');
 }
@@ -46,14 +45,11 @@ async function decryptData(encryptedData, masterKeyBase64) {
 // 5. 阿里云短信服务调用 (占位)
 async function sendAliSms(phone, code, decryptedAliSecrets) {
     console.log(`Placeholder: SMS code ${code} sent to ${phone}`);
-    // ⚠️ 实际实现: 构造阿里云短信服务的请求，包括签名和 fetch 调用
     return { success: true, message: 'Verification code sent successfully.' }; 
 }
 
 // 6. ACRCloud API 调用 (占位)
 async function fetchACRCloud(audioFile, host, key, secret) {
-    // ⚠️ 实际实现: 完整的 ACRCloud API 调用和签名逻辑
-    // 简化返回
     return { code: 0, msg: "Success", metadata: { title: "Test Song", artist: "Test Artist" } };
 }
 
@@ -84,10 +80,9 @@ export async function handleAdminInit(env, upstashClient) {
     const encryptedKeyExists = await upstashClient.getSecret('acr_key');
     if (!encryptedKeyExists) { 
         const masterKey = env.MASTER_ENCRYPTION_KEY;
-        await upstashClient.setSecret('acr_host', env.ACR_HOST); // Host 不加密
+        await upstashClient.setSecret('acr_host', env.ACR_HOST); 
         await upstashClient.setSecret('acr_key', await encryptData(env.ACR_KEY, masterKey));
         await upstashClient.setSecret('acr_secret', await encryptData(env.ACR_SECRET, masterKey));
-        // 对所有 ALI_SMS 密钥也进行加密存储...
     }
 }
 
@@ -120,7 +115,6 @@ export async function handleIdentify(request, env, upstashClient) {
             return new Response(JSON.stringify({ success: false, message: 'No audio file provided' }), { status: 400, headers: JSON_HEADER });
         }
 
-        // 解密 ACRCloud 密钥
         const masterKey = env.MASTER_ENCRYPTION_KEY;
         const host = await upstashClient.getSecret('acr_host');
         const decryptedKey = await decryptData(await upstashClient.getSecret('acr_key'), masterKey);
