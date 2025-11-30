@@ -1,5 +1,5 @@
 // music-detector/src/worker-handlers.js
-// ⚠️ 警告: 安全函数使用简化 Node.js Crypto 替代 Web Crypto。生产环境需升级为 PBKDF2/AES-GCM。
+// 包含详细日志和错误捕获，用于诊断最终崩溃点。
 
 import crypto from 'crypto'; // 引入 Node.js 内置 crypto 模块
 import { Upstash } from './upstash-client.js';
@@ -65,6 +65,7 @@ export async function handleAdminInit(env, upstashClient) {
 
     // 初始化用户
     if (!userExists || !userExists.passwordHash) {
+        console.log(`INIT: Creating admin user ${ADMIN_USER}`);
         const salt = crypto.randomBytes(16);
         const { hash, salt: saltBase64 } = await hashPassword(env.DEFAULT_ADMIN_PASS, salt); 
         
@@ -74,15 +75,20 @@ export async function handleAdminInit(env, upstashClient) {
             salt: saltBase64, 
             phone: '', 
         });
+    } else {
+        console.log(`INIT: Admin user ${ADMIN_USER} already exists.`);
     }
 
     // 初始化加密 Secrets (仅当 Upstash 中不存在时)
     const encryptedKeyExists = await upstashClient.getSecret('acr_key');
     if (!encryptedKeyExists) { 
+        console.log("INIT: Encrypting and saving API secrets.");
         const masterKey = env.MASTER_ENCRYPTION_KEY;
         await upstashClient.setSecret('acr_host', env.ACR_HOST); 
         await upstashClient.setSecret('acr_key', await encryptData(env.ACR_KEY, masterKey));
         await upstashClient.setSecret('acr_secret', await encryptData(env.ACR_SECRET, masterKey));
+    } else {
+        console.log("INIT: API secrets already exist.");
     }
 }
 
@@ -91,21 +97,40 @@ export async function handleAdminInit(env, upstashClient) {
  * 2. 登录认证
  */
 export async function handleAuth(request, env, upstashClient) {
-    const body = await request.json();
-    const { username, password } = body;
-    const user = await upstashClient.getUser(username);
-    
-    if (user && await verifyPassword(password, user.passwordHash, user.salt)) {
-        const token = crypto.randomUUID();
-        await upstashClient.setSession(token, username, 3600); 
-        return new Response(JSON.stringify({ success: true, token, username }), { status: 200, headers: JSON_HEADER });
+    try {
+        const body = await request.json();
+        const { username, password } = body;
+        
+        console.log(`AUTH: Attempting login for ${username}`); // <-- 日志 1
+        
+        const user = await upstashClient.getUser(username);
+        
+        if (!user) {
+            console.log(`AUTH: User ${username} not found.`); // <-- 日志 2
+            return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: JSON_HEADER });
+        }
+        
+        console.log(`AUTH: User found. Starting password verification.`); // <-- 日志 3
+        
+        if (await verifyPassword(password, user.passwordHash, user.salt)) {
+            const token = crypto.randomUUID();
+            await upstashClient.setSession(token, username, 3600); 
+            console.log(`AUTH: SUCCESS! Token generated.`);
+            return new Response(JSON.stringify({ success: true, token, username }), { status: 200, headers: JSON_HEADER });
+        } else {
+            console.log(`AUTH: Password mismatch.`); // <-- 日志 4
+            return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: JSON_HEADER });
+        }
+    } catch (e) {
+        // 捕获所有崩溃
+        console.error("AUTH FATAL CRASH:", e.stack); // <-- 日志 5 (最终崩溃点及堆栈)
+        return new Response(JSON.stringify({ success: false, message: `Server internal error during authentication: ${e.message}` }), { status: 500, headers: JSON_HEADER });
     }
-    return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: JSON_HEADER });
 }
 
 
 /**
- * 3. 音乐版权识别
+ * 3. 音乐版权识别 (代码不变)
  */
 export async function handleIdentify(request, env, upstashClient) {
     try {
@@ -136,7 +161,7 @@ export async function handleIdentify(request, env, upstashClient) {
 
 
 /**
- * 4. 账户更新 (绑定手机/修改密码/发送验证码)
+ * 4. 账户更新 (代码不变)
  */
 export async function handleUserUpdate(request, env, upstashClient, type) {
     const userToken = request.headers.get('Authorization')?.substring(7);
@@ -177,7 +202,7 @@ export async function handleUserUpdate(request, env, upstashClient, type) {
 }
 
 /**
- * 5. 密码重置 (请求和确认)
+ * 5. 密码重置 (代码不变)
  */
 export async function handlePasswordReset(request, env, upstashClient, action) {
     const body = await request.json();
