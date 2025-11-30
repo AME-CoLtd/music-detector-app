@@ -1,7 +1,5 @@
 // api/[[path]].js
 
-// 注意：已移除 export const config，改为 Node.js 默认识别
-
 import { Upstash } from '../src/upstash-client.js';
 import {
   handleAuth,
@@ -31,10 +29,13 @@ async function authenticateToken(token, upstashClient) {
 
 /**
  * Vercel Serverless Function 处理程序
+ * @param {Request} request
  */
 export default async function (request) {
-    const url = new URL(request.url);
-    const path = url.pathname;
+    
+    // ⚠️ 关键修复：构建完整的 URL 对象，以避免 Node.js 运行时中的 Invalid URL 错误
+    const host = request.headers.get('host');
+    const path = new URL(request.url, `https://${host}`).pathname;
     
     const env = process.env;
     const upstashClient = Upstash(env); 
@@ -44,8 +45,7 @@ export default async function (request) {
         await handleAdminInit(env, upstashClient); 
     } catch (e) {
         console.error("Initialization Failed:", e.message);
-        // 如果初始化失败，说明密钥或Upstash连接有问题，返回服务器错误
-        return jsonResponse({ success: false, message: 'Server initialization failed' }, 500);
+        return jsonResponse({ success: false, message: `Server initialization failed: ${e.message}` }, 500);
     }
 
     // 2. 认证检查
