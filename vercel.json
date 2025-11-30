@@ -7,7 +7,7 @@
     ],
     "functions": {
         "api/[[path]].js": {
-            "runtime": "edge"
+            "runtime": "nodejs18.x" 
         }
     }
 }
