@@ -1,0 +1,6 @@
+# .gitignore
+# Vercel and Node files
+.vercel/
+node_modules/
+# Environment Variables
+.env

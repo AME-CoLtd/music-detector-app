@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音乐版权识别系统 - Vercel Edge</title>
+    <!-- CSS 文件拆分并独立引入 -->
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <header>
+        <h1>音乐版权识别系统</h1>
+        <button id="logout-btn" style="display:none;">登出</button>
+    </header>
+
+    <main>
+        <!-- 登录界面 -->
+        <section id="login-section" class="card">
+            <h2>管理员登录 (ameadnin)</h2>
+            <form id="login-form">
+                <input type="text" id="username" placeholder="用户名" required value="ameadnin">
+                <input type="password" id="password" placeholder="密码" required>
+                <button type="submit">登录</button>
+                <p><a href="#" id="forgot-password-link">忘记密码/重置</a></p>
+            </form>
+            <p id="login-message" class="error"></p>
+        </section>
+
+        <!-- 核心功能界面 (登录后显示) -->
+        <section id="core-section" class="card" style="display:none;">
+            <h2>版权识别与账户管理</h2>
+
+            <!-- 1. 音乐识别功能 -->
+            <h3>音乐识别</h3>
+            <input type="file" id="audio-file" accept="audio/*">
+            <button id="identify-btn">开始识别</button>
+            <pre id="identify-result"></pre>
+
+            <!-- 2. 手机绑定/修改密码功能 -->
+            <h3>账户设置</h3>
+            <form id="bind-phone-form">
+                <input type="tel" id="new-phone" placeholder="绑定/更换手机号" required>
+                <button type="submit">绑定手机</button>
+            </form>
+            <br>
+            <form id="change-password-form">
+                <input type="password" id="old-password" placeholder="原密码" required>
+                <input type="password" id="new-password" placeholder="新密码" required>
+                <input type="text" id="sms-code-change" placeholder="短信验证码" required>
+                <button type="button" id="send-code-change-btn">发送验证码</button>
+                <button type="submit">修改密码</button>
+            </form>
+            <p id="account-message"></p>
+        </section>
+
+        <!-- 3. 密码重置界面 (通过手机验证) -->
+        <section id="reset-password-section" class="card" style="display:none;">
+            <h2>密码重置</h2>
+            <form id="reset-password-request-form">
+                <input type="tel" id="reset-phone" placeholder="已绑定的手机号" required>
+                <button type="submit" id="request-reset-btn">获取重置验证码</button>
+            </form>
+            <form id="reset-password-confirm-form" style="display:none;">
+                <input type="password" id="reset-new-password" placeholder="设置新密码" required>
+                <input type="text" id="reset-sms-code" placeholder="短信验证码" required>
+                <button type="submit">确认重置</button>
+            </form>
+            <p id="reset-message"></p>
+            <a href="#" id="back-to-login">返回登录</a>
+        </section>
+
+    </main>
+
+    <footer>
+        <p>© 2025 Powered by Vercel Edge & ACRCloud</p>
+    </footer>
+
+    <!-- JavaScript 文件拆分并独立引入 -->
+    <script src="/script.js"></script>
+</body>
+</html>

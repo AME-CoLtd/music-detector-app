@@ -1,0 +1,15 @@
+{
+  "name": "music-copyright-detector-vercel",
+  "version": "1.0.0",
+  "description": "Music Copyright Detector deployed on Vercel Edge Functions.",
+  "main": "api/[[path]].js",
+  "type": "module",
+  "scripts": {
+    "start": "vercel dev",
+    "deploy": "vercel"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2" 
+    // Vercel Edge Functions 默认支持 fetch，但本地开发可能需要这个依赖
+  }
+}
