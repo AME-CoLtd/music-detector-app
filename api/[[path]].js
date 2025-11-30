@@ -1,4 +1,4 @@
-// api/[[path]].js - 最终兼容 Node.js Serverless Function 的版本
+// api/[[path]].js - 最终修复版本
 
 import { Upstash } from '../src/upstash-client.js';
 import {
@@ -51,7 +51,7 @@ export default async function (request) {
     // ⚠️ 修复：使用 getHeader 函数获取 host 和 Authorization
     const host = getHeader(request, 'Host');
     
-    // 构建完整的 URL 对象，以避免 Invalid URL 错误
+    // 构建完整的 URL 对象
     const fullUrl = new URL(request.url, `https://${host}`);
     const path = fullUrl.pathname;
     
