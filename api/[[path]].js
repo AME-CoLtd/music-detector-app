@@ -1,12 +1,6 @@
 // api/[[path]].js
 
-// --- 强制 Vercel 识别为 Node.js 20.x Serverless Function ---
-export const config = {
-  runtime: 'nodejs20.x',
-  maxDuration: 60, 
-};
-// --------------------------------------------------------
-
+// (这里不再有 export const config = {...} 代码)
 
 import { Upstash } from '../src/upstash-client.js';
 import {
