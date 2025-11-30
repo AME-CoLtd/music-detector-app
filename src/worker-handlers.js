@@ -1,11 +1,9 @@
 // src/worker-handlers.js - Cloudflare Worker Web Crypto API 优化版
 
-// ⚠️ 注意：Worker 环境自带 Web Crypto API，无需 import 'crypto' 或 Buffer
-
 import { Upstash } from './upstash-client.js';
 
 const JSON_HEADER = { 'Content-Type': 'application/json' };
-const HASH_ALGO = 'SHA-256'; // Web Crypto 标准
+const HASH_ALGO = 'SHA-256';
 
 // --- I. 安全和加密工具函数 (使用 Web Crypto API 实现) ---
 
@@ -152,20 +150,25 @@ export async function handleAdminInit(env, upstashClient) {
  * 2. 登录认证
  */
 export async function handleAuth(request, env, upstashClient) {
-    const body = await request.json(); 
-    const { username, password } = body;
-    
-    console.log(`AUTH: Attempting login for ${username}`); 
-    
-    const user = await upstashClient.getUser(username);
-    
-    if (user && await verifyPassword(password, user.passwordHash, user.salt)) {
-        const token = crypto.randomUUID();
-        await upstashClient.setSession(token, username, 3600); 
-        console.log(`AUTH: SUCCESS! Token generated.`);
-        return new Response(JSON.stringify({ success: true, token, username }), { status: 200, headers: JSON_HEADER });
+    try {
+        const body = await request.json(); 
+        const { username, password } = body;
+        
+        console.log(`AUTH: Attempting login for ${username}`); 
+        
+        const user = await upstashClient.getUser(username);
+        
+        if (user && await verifyPassword(password, user.passwordHash, user.salt)) {
+            const token = crypto.randomUUID();
+            await upstashClient.setSession(token, username, 3600); 
+            console.log(`AUTH: SUCCESS! Token generated.`);
+            return new Response(JSON.stringify({ success: true, token, username }), { status: 200, headers: JSON_HEADER });
+        }
+        return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: JSON_HEADER });
+    } catch (e) {
+        console.error("AUTH FATAL CRASH:", e.stack); 
+        return new Response(JSON.stringify({ success: false, message: `Server internal error during authentication: ${e.message}` }), { status: 500, headers: JSON_HEADER });
     }
-    return new Response(JSON.stringify({ success: false, message: 'Invalid credentials' }), { status: 401, headers: JSON_HEADER });
 }
 
 
@@ -173,24 +176,29 @@ export async function handleAuth(request, env, upstashClient) {
  * 3. 音乐版权识别
  */
 export async function handleIdentify(request, env, upstashClient) {
-    const formData = await request.formData();
-    const audioFile = formData.get('audio');
-    
-    if (!audioFile) {
-        return new Response(JSON.stringify({ success: false, message: 'No audio file provided' }), { status: 400, headers: JSON_HEADER });
-    }
+    try { // 加上 try/catch 块
+        const formData = await request.formData();
+        const audioFile = formData.get('audio');
+        
+        if (!audioFile) {
+            return new Response(JSON.stringify({ success: false, message: 'No audio file provided' }), { status: 400, headers: JSON_HEADER });
+        }
 
-    const masterKey = env.MASTER_ENCRYPTION_KEY;
-    const host = await upstashClient.getSecret('acr_host');
-    const decryptedKey = await decryptData(await upstashClient.getSecret('acr_key'), masterKey);
-    const decryptedSecret = await decryptData(await upstashClient.getSecret('acr_secret'), masterKey);
-    
-    const acrResult = await fetchACRCloud(audioFile, host, decryptedKey, decryptedSecret);
+        const masterKey = env.MASTER_ENCRYPTION_KEY;
+        const host = await upstashClient.getSecret('acr_host');
+        const decryptedKey = await decryptData(await upstashClient.getSecret('acr_key'), masterKey);
+        const decryptedSecret = await decryptData(await upstashClient.getSecret('acr_secret'), masterKey);
+        
+        const acrResult = await fetchACRCloud(audioFile, host, decryptedKey, decryptedSecret);
 
-    if (acrResult.code === 0) {
-        return new Response(JSON.stringify({ success: true, result: acrResult }), { headers: JSON_HEADER });
-    } else {
-        return new Response(JSON.stringify({ success: false, message: acrResult.msg || 'ACRCloud identification failed' }), { status: 500, headers: JSON_HEADER });
+        if (acrResult.code === 0) {
+            return new Response(JSON.stringify({ success: true, result: acrResult }), { headers: JSON_HEADER });
+        } else {
+            return new Response(JSON.stringify({ success: false, message: acrResult.msg || 'ACRCloud identification failed' }), { status: 500, headers: JSON_HEADER });
+        }
+    } catch (e) {
+        console.error('Identification Error:', e.message);
+        return new Response(JSON.stringify({ success: false, message: 'Identification failed: ' + e.message }), { status: 500, headers: JSON_HEADER });
     }
 }
 
@@ -198,13 +206,13 @@ export async function handleIdentify(request, env, upstashClient) {
 /**
  * 4. 账户更新 (绑定手机/修改密码/发送验证码)
  */
-export async function handleUserUpdate(request, env, upstashClient, type)  { // ⚠️ EXPORT 修复在这里
+export async function handleUserUpdate(request, env, upstashClient, type) { 
     const userToken = request.headers.get('Authorization')?.substring(7);
     const username = await upstashClient.getSession(userToken); 
     if (!username) return new Response(JSON.stringify({ success: false, message: 'Session expired' }), { status: 401, headers: JSON_HEADER });
 
     const user = await upstashClient.getUser(username);
-    const body = type !== 'send_code' ? await request.json() : {}; // Worker 环境支持 request.json()
+    const body = type !== 'send_code' ? await request.json() : {}; 
 
     if (type === 'phone') {
         const { phone } = body;
@@ -215,7 +223,7 @@ export async function handleUserUpdate(request, env, upstashClient, type)  { // 
     if (type === 'send_code') {
         if (!user.phone) return new Response(JSON.stringify({ success: false, message: '未绑定手机号' }), { status: 400, headers: JSON_HEADER });
         
-        const code = crypto.randomUUID().substring(0,6); // 简化验证码生成
+        const code = crypto.randomUUID().substring(0,6); 
         await upstashClient.setSmsCode(user.phone, code, 300); 
         const smsResult = await sendAliSms(user.phone, code, {/* Decrypted Secrets */});
         return new Response(JSON.stringify({ success: smsResult.success, message: smsResult.message }), { status: smsResult.success ? 200 : 500, headers: JSON_HEADER });
@@ -239,7 +247,7 @@ export async function handleUserUpdate(request, env, upstashClient, type)  { // 
 /**
  * 5. 密码重置
  */
-export async function handlePasswordReset(request, env, upstashClient, action) { // ⚠️ EXPORT 修复在这里
+export async function handlePasswordReset(request, env, upstashClient, action) { 
     const body = await request.json();
 
     if (action === 'request') {
@@ -258,4 +266,13 @@ export async function handlePasswordReset(request, env, upstashClient, action) {
         const { phone, newPassword, smsCode } = body;
         const storedCode = await upstashClient.getSmsCode(phone);
         
-        if (smsCode !== storedCode) return new Response(JSON.stringify({ success: false, message:}
+        if (smsCode !== storedCode) return new Response(JSON.stringify({ success: false, message: '验证码错误或已过期' }), { status: 400, headers: JSON_HEADER });
+        
+        const user = {/* 再次查找用户 */};
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const { hash, salt: saltBase64 } = await hashPassword(newPassword, salt);
+        await upstashClient.saveUser(user.username, { passwordHash: hash, salt: saltBase64 });
+        
+        return new Response(JSON.stringify({ success: true, message: '密码重置成功' }), { status: 200, headers: JSON_HEADER });
+    }
+}
