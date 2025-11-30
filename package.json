@@ -1,7 +1,7 @@
 {
   "name": "music-copyright-detector-vercel",
   "version": "1.0.0",
-  "description": "Music Copyright Detector deployed on Vercel Edge Functions.",
+  "description": "Music Copyright Detector deployed on Vercel Serverless Functions.",
   "main": "api/[[path]].js",
   "type": "module",
   "scripts": {

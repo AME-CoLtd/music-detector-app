@@ -1,5 +1,13 @@
 // api/[[path]].js
 
+// --- 强制 Vercel 识别为 Node.js 20.x Serverless Function ---
+export const config = {
+  runtime: 'nodejs20.x',
+  maxDuration: 60, 
+};
+// --------------------------------------------------------
+
+
 import { Upstash } from '../src/upstash-client.js';
 import {
   handleAuth,
@@ -8,7 +16,6 @@ import {
   handleUserUpdate,
   handleIdentify,
 } from '../src/worker-handlers.js'; 
-// 注意: Vercel Edge Functions 中环境变量通过 process.env 访问
 
 const APP_JSON = 'application/json';
 
@@ -16,24 +23,32 @@ const APP_JSON = 'application/json';
 const jsonResponse = (data, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': APP_JSON, 'Access-Control-Allow-Origin': '*' }, // CORS for testing
+    headers: { 'Content-Type': APP_JSON, 'Access-Control-Allow-Origin': '*' },
   });
 
 /**
- * Vercel Edge Function 处理程序
+ * 认证函数 (检查 Upstash 中的 Session Token)
+ */
+async function authenticateToken(token, upstashClient) {
+    if (!token) return false;
+    // Vercel Serverless Functions 中，环境变量通过 process.env 访问
+    const username = await upstashClient.getSession(token); 
+    return !!username;
+}
+
+
+/**
+ * Vercel Serverless Function 处理程序
  * @param {Request} request
  */
 export default async function (request) {
     const url = new URL(request.url);
     const path = url.pathname;
     
-    // 环境变量
     const env = process.env;
-    
-    // 实例化 Upstash 客户端 (传递 env 以获取 URL/TOKEN)
     const upstashClient = Upstash(env); 
 
-    // 1. 初始化管理员账户和加密密钥 (必须在所有操作之前运行)
+    // 1. 初始化管理员账户和加密密钥 
     await handleAdminInit(env, upstashClient); 
 
     // 2. 认证检查
@@ -64,7 +79,6 @@ export default async function (request) {
             return handleUserUpdate(request, env, upstashClient, 'password'); 
             
         case '/api/user/send-code-for-change-password':
-            // 假设这是一个单独的API用于发送短信验证码
             return handleUserUpdate(request, env, upstashClient, 'send_code'); 
 
         case '/api/reset-password-request':
@@ -76,14 +90,4 @@ export default async function (request) {
         default:
             return jsonResponse({ success: false, message: 'API Not Found' }, 404);
     }
-}
-
-/**
- * 认证函数 (检查 Upstash 中的 Session Token)
- */
-async function authenticateToken(token, upstashClient) {
-    if (!token) return false;
-    // 检查 session:token 是否存在且未过期
-    const username = await upstashClient.getSession(token); 
-    return !!username;
 }
