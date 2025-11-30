@@ -1,6 +1,6 @@
 // api/[[path]].js
 
-// (这里不再有 export const config = {...} 代码)
+// 注意：已移除 export const config，改为 Node.js 默认识别
 
 import { Upstash } from '../src/upstash-client.js';
 import {
@@ -13,7 +13,6 @@ import {
 
 const APP_JSON = 'application/json';
 
-// 工具函数：生成 JSON 响应
 const jsonResponse = (data, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
@@ -25,7 +24,6 @@ const jsonResponse = (data, status = 200) =>
  */
 async function authenticateToken(token, upstashClient) {
     if (!token) return false;
-    // Vercel Serverless Functions 中，环境变量通过 process.env 访问
     const username = await upstashClient.getSession(token); 
     return !!username;
 }
@@ -33,7 +31,6 @@ async function authenticateToken(token, upstashClient) {
 
 /**
  * Vercel Serverless Function 处理程序
- * @param {Request} request
  */
 export default async function (request) {
     const url = new URL(request.url);
@@ -43,14 +40,19 @@ export default async function (request) {
     const upstashClient = Upstash(env); 
 
     // 1. 初始化管理员账户和加密密钥 
-    await handleAdminInit(env, upstashClient); 
+    try {
+        await handleAdminInit(env, upstashClient); 
+    } catch (e) {
+        console.error("Initialization Failed:", e.message);
+        // 如果初始化失败，说明密钥或Upstash连接有问题，返回服务器错误
+        return jsonResponse({ success: false, message: 'Server initialization failed' }, 500);
+    }
 
     // 2. 认证检查
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
     let isAuthenticated = false;
 
-    // 登录/重置密码相关的接口无需认证
     if (!['/api/login', '/api/reset-password-request', '/api/reset-password-confirm', '/api/user/send-code-for-change-password'].includes(path)) {
       isAuthenticated = await authenticateToken(token, upstashClient);
       if (!isAuthenticated) {
